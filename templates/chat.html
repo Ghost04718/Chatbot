@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="chat-container" data-active-chat-id="{{ active_chat_id|default('null') }}">
+    <div class="chat-sidebar">
+        <h3>Your AI Conversations</h3>
+        <form id="create-chat-form">
+            <input type="text" id="chat-title" placeholder="New conversation" required>
+            <button type="submit" class="btn-new-chat">
+                <i class="fas fa-plus"></i>
+            </button>
+        </form>
+        <ul id="chat-list">
+            {% for chat in chats %}
+                <li data-chat-id="{{ chat.id }}" {% if chat.id == active_chat_id %}class="active"{% endif %}>
+                    <span class="chat-title">{{ chat.title }}</span>
+                    <button class="delete-chat" data-chat-id="{{ chat.id }}">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="chat-main">
+        <div id="chat-messages"></div>
+        <div id="ai-typing" class="ai-typing">
+            <div class="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+        <form id="message-form">
+            <textarea id="user-message" placeholder="Ask me anything..." required></textarea>
+            <button type="submit" class="btn-send">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
