@@ -10,7 +10,7 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
     username = Column(String(64), unique=True, nullable=False)
-    email = Column(String(120), unique=True, nullable=False)
+    email = Column(String(120), unique=False, nullable=False)
     password_hash = Column(String(128))
     chats = relationship('Chat', backref='user', lazy='dynamic')
 
