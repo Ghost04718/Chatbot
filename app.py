@@ -4,9 +4,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from database import db, User, Chat, Message
 from config import Config
 from openai import OpenAI
-import markdown2
 from datetime import datetime
-import os
+from markdown import markdown
+from markdown.extensions.fenced_code import FencedCodeExtension
+from markdown.extensions.codehilite import CodeHiliteExtension
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -16,14 +17,13 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 # Set up OpenAI API
-endpoint = Config.OPENAI_API_BASE
-model_name = "gpt-4o-mini"
-model_prompt = "You are a helpful assistant for students in The Chinese University of Hong Kong, Shenzhen. Answer short and concise."
-
 client = OpenAI(
-    base_url=endpoint,
+    base_url=Config.OPENAI_API_BASE,
     api_key=Config.OPENAI_API_KEY,
 )
+
+MODEL_NAME = "gpt-4o-mini"
+MODEL_PROMPT = "You are a helpful assistant for students in The Chinese University of Hong Kong, Shenzhen. Answer short and concise."
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -40,8 +40,7 @@ def register():
         email = request.form['email']
         password = request.form['password']
         
-        user = User.query.filter_by(username=username).first()
-        if user:
+        if User.query.filter_by(username=username).first():
             flash('Username already exists')
             return redirect(url_for('register'))
         
@@ -80,7 +79,6 @@ def logout():
 @login_required
 def chat():
     chats = Chat.query.filter_by(user_id=current_user.id).all()
-    # Get the last active chat or the first chat if available
     active_chat = chats[0] if chats else None
     active_chat_id = active_chat.id if active_chat else None
     return render_template('chat.html', chats=chats, active_chat_id=active_chat_id)
@@ -132,33 +130,28 @@ def send_message():
     if chat.user_id != current_user.id:
         return jsonify({'error': 'Unauthorized'}), 403
     
-    # Fetch chat history
-    chat_history = Message.query.filter_by(chat_id=chat_id).order_by(Message.timestamp).all()
+    chat_history = Message.query.filter_by(chat_id=chat_id).order_by(Message.timestamp.desc()).limit(5).all()
     
-    # Prepare messages for API call
     messages = [
-        {"role": "system", "content": f"{model_prompt}"}
+        {"role": "system", "content": MODEL_PROMPT}
     ]
     
-    # Add chat history to messages
-    for msg in chat_history[-5:]:  # Include last 5 messages for context
+    for msg in reversed(chat_history):
         role = "user" if msg.is_user else "assistant"
         messages.append({"role": role, "content": msg.content})
     
-    # Add the current user message
     messages.append({"role": "user", "content": user_message})
     
     user_msg = Message(content=user_message, is_user=True, chat_id=chat_id, timestamp=datetime.utcnow())
     db.session.add(user_msg)
     
     try:
-        # Generate AI response
         response = client.chat.completions.create(
             messages=messages,
             temperature=1.0,
             top_p=1.0,
             max_tokens=1000,
-            model=model_name
+            model=MODEL_NAME
         )
         ai_message = response.choices[0].message.content
         
@@ -166,12 +159,14 @@ def send_message():
         db.session.add(ai_msg)
         db.session.commit()
         
+        html_content = markdown(ai_message, extensions=[FencedCodeExtension(), CodeHiliteExtension()])
+        
         return jsonify({
             'user_message': user_message,
-            'ai_message': markdown2.markdown(ai_message)
+            'ai_message': html_content
         })
     except Exception as e:
-        print(f"Error generating AI response: {e}")
+        app.logger.error(f"Error generating AI response: {e}")
         return jsonify({'error': 'Failed to generate AI response'}), 500
 
 if __name__ == '__main__':
